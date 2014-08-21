@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+
+#
+# Setup.
+#
+
+VERSION="0.1.0"
+E_PREFIX=${E_PREFIX-/usr/local}
+VERSIONS_DIR=$E_PREFIX/e/versions
+UP=$'\033[A'
+DOWN=$'\033[B'
+
+test -d $VERSIONS_DIR || mkdir -p $VERSIONS_DIR
+
+#
+# Exit with the given <msg ...>
+#
+
+abort() {
+  printf "\n  \033[31mError: $@\033[0m\n\n" && exit 1
+}
+
+#
+# Output usage information.
+#
+
+display_help() {
+  cat <<-EOF
+
+  Usage: e [options] [COMMAND] [args]
+
+  Commands:
+
+    e                            Output versions installed
+
+  Options:
+
+    -V, --version   Output current version of e
+    -h, --help      Display help information
+
+EOF
+  exit 0
+}
+
+#
+# Output version after selected.
+#
+
+next_version_installed() {
+  list_versions_installed | grep $selected -A 1 | tail -n 1
+}
+
+#
+# Output version before selected.
+#
+
+prev_version_installed() {
+  list_versions_installed | grep $selected -B 1 | head -n 1
+}
+
+#
+# Output e version.
+#
+
+display_e_version() {
+  echo $VERSION && exit 0
+}
+
+#
+# Check for installed version, and populate $active
+#
+
+check_current_version() {
+  local eiffel=`readlink $HOME/Eiffel`
+  active=`basename $eiffel`
+}
+
+#
+# Display sorted versions directories paths.
+#
+
+versions_paths() {
+  ls -d $VERSIONS_DIR/*
+}
+
+#
+# Display installed versions with <selected>
+#
+
+display_versions_with_selected() {
+  selected=$1
+  echo
+  for dir in `versions_paths`; do
+    local version=${dir##*/}
+    if test "$version" = "$selected"; then
+      printf "  \033[36mο\033[0m $version\033[0m\n"
+    else
+      printf "    \033[90m$version\033[0m\n"
+    fi
+  done
+  echo
+}
+
+#
+# List installed versions.
+#
+
+list_versions_installed() {
+  for dir in `versions_paths`; do
+    local version=${dir##*/}
+    echo $version
+  done
+}
+
+#
+# Display current Eiffel version and others installed.
+#
+
+display_versions() {
+  clear
+  check_current_version
+  display_versions_with_selected $active
+
+  while true; do
+    read -s -n 3 c
+    case "$c" in
+      $UP)
+        clear
+        display_versions_with_selected $(prev_version_installed)
+        ;;
+      $DOWN)
+        clear
+        display_versions_with_selected $(next_version_installed)
+        ;;
+      *)
+        clear
+        activate $selected
+        exit
+        ;;
+    esac
+  done
+}
+
+#
+# Activate <version>
+#
+
+activate() {
+  local version=$1
+  check_current_version
+  if test "$version" != "$active"; then
+    local dir=$VERSIONS_DIR/$version
+    echo $active > $VERSIONS_DIR/.prev
+    rm $E_PREFIX/Eiffel
+    ln -s $dir $E_PREFIX/Eiffel
+  fi
+}
+
+#
+# Handle arguments.
+#
+
+if test $# -eq 0; then
+  test "$(ls -l $VERSIONS_DIR | grep ^d)" || abort "no installed version"
+  display_versions
+else
+  while test $# -ne 0; do
+    case $1 in
+      -V|--version) display_e_version ;;
+      -h|--help|help) display_help ;;
+      *) display_help ;;
+    esac
+    shift
+  done
+fi
